@@ -87,18 +87,18 @@ pub struct Variant {
     pub code: u16,
 }
 
-pub struct CodeAttributeArg {
+pub struct StatusAttributeArg {
     origin: MetaNameValue,
     code: u16,
 }
 
-impl ToTokens for CodeAttributeArg {
+impl ToTokens for StatusAttributeArg {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         self.origin.to_tokens(tokens);
     }
 }
 
-impl Parse for CodeAttributeArg {
+impl Parse for StatusAttributeArg {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let meta: NestedMeta = input.parse()?;
         match meta {
@@ -106,7 +106,7 @@ impl Parse for CodeAttributeArg {
                 path,
                 eq_token,
                 lit: Lit::Int(lit),
-            })) if path.is_ident("code") => Ok(Self {
+            })) if path.is_ident("status") => Ok(Self {
                 code: lit.base10_parse()?,
                 origin: MetaNameValue {
                     path,
@@ -122,11 +122,11 @@ impl Parse for CodeAttributeArg {
 pub fn get_code(attrs: &[Attribute]) -> syn::Result<Option<u16>> {
     let mut code_attr_iter = attrs
         .iter()
-        .filter(|attr| attr.path.is_ident("simple_responder"))
+        .filter(|attr| attr.path.is_ident("response"))
         .map(|attr| attr.parse_args())
         .collect::<syn::Result<Vec<_>>>()?
         .into_iter()
-        .flat_map(|attrs: Wrap<Punctuated<CodeAttributeArg, Token![,]>>| attrs.0);
+        .flat_map(|attrs: Wrap<Punctuated<StatusAttributeArg, Token![,]>>| attrs.0);
     let code = code_attr_iter
         .next()
         .map::<syn::Result<_>, _>(|code_attr| {

@@ -5,7 +5,7 @@ use utils::{Item, ItemData};
 
 mod utils;
 
-#[proc_macro_derive(GetStatus, attributes(simple_responder))]
+#[proc_macro_derive(GetStatus, attributes(response))]
 pub fn derive_get_status_code(input: TokenStream) -> TokenStream {
     let input: Item = parse_macro_input!(input);
 
@@ -67,7 +67,7 @@ pub fn derive_get_status_code(input: TokenStream) -> TokenStream {
     .into()
 }
 
-#[proc_macro_derive(SimpleResponder, attributes(simple_responder))]
+#[proc_macro_derive(SimpleResponder, attributes(response))]
 pub fn derive_maskable(input: TokenStream) -> TokenStream {
     let input: Item = parse_macro_input!(input);
 
