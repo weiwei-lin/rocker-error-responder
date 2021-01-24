@@ -9,13 +9,13 @@ use thiserror::Error;
 
 #[derive(Debug, Error, SimpleResponder)]
 #[error("error message")]
-#[response(status = 500)]
+#[response(code = 500)]
 enum Error {
     #[error("internal server error")]
-    #[response(status = 400)]
+    #[response(code = 400)]
     BadRequest,
     #[error("not found")]
-    #[response(status = 404)]
+    #[response(code = 404)]
     NotFound,
     #[error("other")]
     Other,

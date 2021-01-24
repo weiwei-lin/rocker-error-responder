@@ -11,7 +11,7 @@ use thiserror::Error;
 async fn case1() {
     #[derive(Debug, Error, SimpleResponder)]
     #[error("error message")]
-    #[response(status = 500)]
+    #[response(code = 500)]
     struct Error;
 
     #[get("/")]
