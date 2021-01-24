@@ -1,6 +1,25 @@
-[workspace]
-
-members = [
-    "rocket_simple_responder",
-    "rocket_simple_responder_derive",
+[package]
+name = "rocket_simple_responder"
+description = "a simple rocket responder derive macro"
+repository = "https://github.com/weiwei-lin/rocket-simple-responder"
+version = "0.0.1"
+authors = ["Weiwei Lin <weiwei.will.lin@gmail.com>"]
+license = "Apache-2.0"
+edition = "2018"
+include = [
+    "**/*.rs",
+    "Cargo.toml",
 ]
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1.0.24"
+quote = "1.0.7"
+syn = "1.0.54"
+rocket = { git = "https://github.com/SergioBenitez/Rocket", rev = "9671115" }
+
+[dev-dependencies]
+thiserror = "1.0.23"
+tokio = "0.2"
