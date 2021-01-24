@@ -1,10 +1,15 @@
 [package]
 name = "rocket_simple_responder"
+description = "A simple rocket responder derive macro"
+repository = "https://github.com/weiwei-lin/rocket-simple-responder"
 version = "0.0.1"
 authors = ["Weiwei Lin <weiwei.will.lin@gmail.com>"]
+license = "Apache-2.0"
 edition = "2018"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+include = [
+    "**/*.rs",
+    "Cargo.toml",
+]
 
 [dependencies]
 rocket = { git = "https://github.com/SergioBenitez/Rocket", rev = "9671115" }
