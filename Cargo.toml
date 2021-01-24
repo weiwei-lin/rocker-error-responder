@@ -1,6 +1,6 @@
 [workspace]
 
 members = [
-    "rocket_error_responder",
-    "rocket_error_responder_derive",
+    "rocket_simple_responder",
+    "rocket_simple_responder_derive",
 ]

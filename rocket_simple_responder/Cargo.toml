@@ -1,0 +1,15 @@
+[package]
+name = "rocket_simple_responder"
+version = "0.0.1"
+authors = ["Weiwei Lin <weiwei.will.lin@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+rocket = { git = "https://github.com/SergioBenitez/Rocket", rev = "9671115" }
+rocket_simple_responder_derive = { version = "0.0.1", path = "../rocket_simple_responder_derive" }
+
+[dev-dependencies]
+thiserror = "1.0.23"
+tokio = "0.2"
