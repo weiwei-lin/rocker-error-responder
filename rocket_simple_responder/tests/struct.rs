@@ -4,12 +4,12 @@ use rocket::{
     local::asynchronous::Client,
     routes,
 };
-use rocket_simple_responder::{GetStatus, SimpleResponder};
+use rocket_simple_responder::SimpleResponder;
 use thiserror::Error;
 
 #[tokio::test]
 async fn case1() {
-    #[derive(Debug, Error, GetStatus, SimpleResponder)]
+    #[derive(Debug, Error, SimpleResponder)]
     #[error("error message")]
     #[response(status = 500)]
     struct Error;
