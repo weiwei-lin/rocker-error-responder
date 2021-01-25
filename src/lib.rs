@@ -1,8 +1,9 @@
 use proc_macro::TokenStream;
-use quote::quote;
+use quote::{format_ident, quote};
 use syn::{parse_macro_input, parse_quote, Fields};
 use utils::{Item, ItemData};
 
+mod attrs;
 mod utils;
 
 #[proc_macro_derive(SimpleResponder, attributes(response))]
@@ -16,29 +17,71 @@ pub fn derive_maskable(input: TokenStream) -> TokenStream {
 
     let ident = input.ident;
 
-    let status_impl = match input.data {
+    let responder_impl = match input.data {
         ItemData::Enum(data) => {
             let arms = data.variants.iter().map(|v| {
-                let code = v.code;
                 let ident = &v.repr.ident;
-                match v.repr.fields {
-                    Fields::Named(..) => quote! { Self::#ident{..} => #code, },
-                    Fields::Unnamed(..) => quote! { Self::#ident(..) => #code, },
-                    Fields::Unit => quote! { Self::#ident => #code, },
+                if let Some(delegate) = &v.attrs.delegate {
+                    let expr = &delegate.value;
+                    let patterns = fields_pat(&v.repr.fields);
+                    quote! {
+                        Self::#ident#patterns => ::rocket::response::Responder::respond_to(#expr, request),
+                    }
+                } else if let Some(code) = &v.attrs.code {
+                    let code = code.code;
+                    let patterns = match &v.repr.fields {
+                        Fields::Named(..) => quote!{(..)},
+                        Fields::Unnamed(..) => quote!{(..)},
+                        Fields::Unit => quote!{},
+                    };
+                    quote! {
+                        Self::#ident#patterns => {
+                            let msg = ::std::string::ToString::to_string(&self);
+                            Ok(::rocket::Response::build()
+                                .status(::rocket::http::Status::from_code(#code).unwrap())
+                                .header(::rocket::http::ContentType::Plain)
+                                .sized_body(msg.len(), ::std::io::Cursor::new(msg))
+                                .finalize())
+                        }
+                    }
+                } else {
+                    panic!("should have one of delegate or code");
                 }
             });
-            quote! {{
-                let code = match &self { #(#arms)* };
-                ::rocket::http::Status::from_code(code).unwrap()
-            }}
+            quote! { match self { #(#arms)* } }
         }
         ItemData::Struct(data) => {
-            let code = data.code;
-            quote! { ::rocket::http::Status::from_code(#code).unwrap() }
+            if let Some(delegate) = data.attrs.delegate {
+                let expr = delegate.value;
+                let patterns = fields_pat(&data.repr.fields);
+                quote! {{
+                    let Self#patterns = self;
+                    ::rocket::response::Responder::respond_to(#expr, request)
+                }}
+            } else if let Some(code) = data.attrs.code {
+                let code = code.code;
+                quote! {{
+                    let msg = ::std::string::ToString::to_string(&self);
+                    Ok(::rocket::Response::build()
+                        .status(::rocket::http::Status::from_code(#code).unwrap())
+                        .header(::rocket::http::ContentType::Plain)
+                        .sized_body(msg.len(), ::std::io::Cursor::new(msg))
+                        .finalize())
+                }}
+            } else {
+                panic!("should have one of delegate or code");
+            }
         }
         ItemData::Union(data) => {
-            let code = data.code;
-            quote! { ::rocket::http::Status::from_code(#code).unwrap() }
+            let code = data.attrs.code.expect("should have code").code;
+            quote! {{
+                let msg = ::std::string::ToString::to_string(&self);
+                Ok(::rocket::Response::build()
+                    .status(::rocket::http::Status::from_code(#code).unwrap())
+                    .header(::rocket::http::ContentType::Plain)
+                    .sized_body(msg.len(), ::std::io::Cursor::new(msg))
+                    .finalize())
+            }}
         }
     };
 
@@ -46,16 +89,30 @@ pub fn derive_maskable(input: TokenStream) -> TokenStream {
         impl#impl_generics ::rocket::response::Responder<'_r, '_o> for #ident#ty_generics
         #where_clauses
         {
-            fn respond_to(self, _request: &'_r ::rocket::Request<'_>) -> ::rocket::response::Result<'_o> {
-                let status = #status_impl;
-                let msg = ::std::string::ToString::to_string(&self);
-                Ok(::rocket::Response::build()
-                    .status(status)
-                    .header(::rocket::http::ContentType::Plain)
-                    .sized_body(msg.len(), ::std::io::Cursor::new(msg))
-                    .finalize())
+            fn respond_to(self, request: &'_r ::rocket::Request<'_>) -> ::rocket::response::Result<'_o> {
+                #responder_impl
             }
         }
     })
     .into()
+}
+
+fn fields_pat(fields: &Fields) -> proc_macro2::TokenStream {
+    match fields {
+        Fields::Named(fields) => {
+            let fields = &fields.named;
+            quote! {{ #fields }}
+        }
+        Fields::Unnamed(fields) => {
+            let fields = fields
+                .unnamed
+                .iter()
+                .enumerate()
+                .map(|(i, _f)| format_ident!("_{}", i));
+            quote! {(#(#fields)*,)}
+        }
+        Fields::Unit => {
+            quote! {}
+        }
+    }
 }

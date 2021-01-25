@@ -8,22 +8,34 @@ use rocket_simple_responder::SimpleResponder;
 use thiserror::Error;
 
 #[derive(Debug, Error, SimpleResponder)]
-#[error("error message")]
 #[response(code = 500)]
 enum Error {
     #[error("internal server error")]
     #[response(code = 400)]
-    BadRequest,
+    BadRequest(String),
     #[error("not found")]
     #[response(code = 404)]
     NotFound,
+    #[error("auth error")]
+    #[response(delegate = .0)]
+    Auth(AuthError),
     #[error("other")]
     Other,
 }
 
+#[derive(Debug, Error, SimpleResponder)]
+enum AuthError {
+    #[error("unauthorized")]
+    #[response(code = 401)]
+    Unauthorized,
+    #[error("forbidden")]
+    #[response(code = 403)]
+    Forbidden,
+}
+
 #[get("/")]
 fn case1_route() -> Error {
-    Error::BadRequest
+    Error::BadRequest("".into())
 }
 
 #[tokio::test]
@@ -38,7 +50,7 @@ async fn case1() {
 
     assert_eq!(
         response.into_string().await,
-        Some(Error::BadRequest.to_string())
+        Some(Error::BadRequest("".into()).to_string())
     );
 }
 
@@ -79,4 +91,25 @@ async fn case3() {
     assert_eq!(response.content_type(), Some(ContentType::Plain));
 
     assert_eq!(response.into_string().await, Some(Error::Other.to_string()));
+}
+
+#[get("/")]
+fn case4_route() -> Error {
+    Error::Auth(AuthError::Forbidden)
+}
+
+#[tokio::test]
+async fn case4() {
+    let rocket = rocket::ignite().mount("/", routes![case4_route]);
+    let client = Client::untracked(rocket)
+        .await
+        .expect("valid rocket instance");
+    let response = client.get("/").dispatch().await;
+    assert_eq!(response.status(), Status::Forbidden);
+    assert_eq!(response.content_type(), Some(ContentType::Plain));
+
+    assert_eq!(
+        response.into_string().await,
+        Some(AuthError::Forbidden.to_string())
+    );
 }
