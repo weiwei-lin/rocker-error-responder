@@ -3,16 +3,28 @@ A rust that supports deriving simple rocket responder.
 
 ## Example
 ```rust
-use rocket_simple_responder::{GetStatus, SimpleResponder};
+use rocket_simple_responder::SimpleResponder;
 use thiserror::Error;
 
-#[derive(Debug, Error, GetStatus, SimpleResponder)]
+#[derive(Debug, Error, SimpleResponder)]
+#[response(code = 500)]
 enum QueryEndpointError {
-    #[error("only admin can access this endpoint")]
-    #[simple_responder(code = 403)]
-    AuthenticationError,
+    #[error("bad request")]
+    #[response(code = 400)]
+    BadRequest,
+    #[error("auth error happened")]
+    AuthError(#[response(delegate)] AuthenticationError),
     #[error("something bad happened")]
-    #[simple_responder(code = 500)]
     InternalServerError,
+}
+
+#[derive(Debug, Error, SimpleResponder)]
+enum AuthenticationError {
+    #[error("only admin can access this endpoint")]
+    #[response(code = 403)]
+    Forbidden,
+    #[error("please login")]
+    #[response(code = 401)]
+    Unauthorized,
 }
 ```
