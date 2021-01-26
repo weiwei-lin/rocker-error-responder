@@ -14,9 +14,7 @@ pub fn derive_maskable(input: TokenStream) -> TokenStream {
     impl_generics.params.push(parse_quote!('_r));
     impl_generics.params.push(parse_quote!('_o: '_r));
     let (_, ty_generics, where_clauses) = input.generics.split_for_impl();
-    let types = input.generics.type_params().map(|t| &t.ident);
-    let mut expanded_where_clauses: WhereClause =
-        parse_quote! {where #(#types: ::rocket::response::Responder<'_r, '_o>,)*};
+    let mut expanded_where_clauses: WhereClause = parse_quote! { where };
 
     if let Some(where_clauses) = where_clauses {
         for predicate in &where_clauses.predicates {
@@ -30,13 +28,15 @@ pub fn derive_maskable(input: TokenStream) -> TokenStream {
         ItemData::Enum(data) => {
             let arms = data.variants.iter().map(|v| {
                 let ident = &v.repr.ident;
-                if let Some(delegate) = &v.attrs.delegate {
-                    let expr = &delegate.value;
+                if let Some(delegate) = &v.fields_attrs.delegate {
+                    let delegate_ident = &delegate.ident;
+                    let delegate_ty = &delegate.ty;
                     let patterns = fields_pat(&v.repr.fields);
+                    expanded_where_clauses.predicates.push(parse_quote!{ #delegate_ty: ::rocket::response::Responder<'_r, '_o> });
                     quote! {
-                        Self::#ident#patterns => ::rocket::response::Responder::respond_to(#expr, request),
+                        Self::#ident#patterns => ::rocket::response::Responder::respond_to(#delegate_ident, request),
                     }
-                } else if let Some(code) = &v.attrs.code {
+                } else if let Some(code) = &v.variant_attrs.code {
                     let code = code.code;
                     let patterns = match &v.repr.fields {
                         Fields::Named(..) => quote!{(..)},
@@ -60,14 +60,18 @@ pub fn derive_maskable(input: TokenStream) -> TokenStream {
             quote! { match self { #(#arms)* } }
         }
         ItemData::Struct(data) => {
-            if let Some(delegate) = data.attrs.delegate {
-                let expr = delegate.value;
+            if let Some(delegate) = data.fields_attrs.delegate {
+                let delegate_ident = delegate.ident;
+                let delegate_ty = &delegate.ty;
+                expanded_where_clauses
+                    .predicates
+                    .push(parse_quote! { #delegate_ty: ::rocket::response::Responder<'_r, '_o> });
                 let patterns = fields_pat(&data.repr.fields);
                 quote! {{
                     let Self#patterns = self;
-                    ::rocket::response::Responder::respond_to(#expr, request)
+                    ::rocket::response::Responder::respond_to(#delegate_ident, request)
                 }}
-            } else if let Some(code) = data.attrs.code {
+            } else if let Some(code) = data.ty_attrs.code {
                 let code = code.code;
                 quote! {{
                     let msg = ::std::string::ToString::to_string(&self);
@@ -82,7 +86,7 @@ pub fn derive_maskable(input: TokenStream) -> TokenStream {
             }
         }
         ItemData::Union(data) => {
-            let code = data.attrs.code.expect("should have code").code;
+            let code = data.ty_attrs.code.expect("should have code").code;
             quote! {{
                 let msg = ::std::string::ToString::to_string(&self);
                 Ok(::rocket::Response::build()

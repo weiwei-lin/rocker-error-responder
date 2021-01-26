@@ -1,4 +1,4 @@
-use attrs::Attrs;
+use attrs::{FieldsAttrs, TypeAttrs};
 use proc_macro2::Ident;
 use syn::{
     parse::{Parse, ParseStream},
@@ -25,56 +25,73 @@ pub struct Item {
 impl Parse for Item {
     fn parse(input: ParseStream) -> Result<Self> {
         let repr: DeriveInput = input.parse()?;
-        let attrs = attrs::get(repr.attrs.as_slice())?;
+        let ty_attrs = TypeAttrs::new(repr.attrs.as_slice())?;
 
         let data = match repr.data {
             Data::Enum(data) => {
-                if let Some(delegate) = attrs.delegate {
-                    return Err(Error::new_spanned(
-                        delegate.kw,
-                        "delegate cannot be applied on enums",
-                    ));
-                }
                 let variants = data
                     .variants
                     .iter()
                     .map(|v| {
-                        let mut variant_attrs = attrs::get(v.attrs.as_slice())?;
-                        if variant_attrs.delegate.is_none() {
-                            variant_attrs.code = variant_attrs.code.or_else(|| attrs.code.clone());
-                            if variant_attrs.code.is_none() {
-                                return Err(Error::new_spanned(
-                                    v,
-                                    "code or delegate must be specified",
-                                ));
-                            }
+                        let mut variant_attrs = TypeAttrs::new(v.attrs.as_slice())?;
+                        let fields_attrs = FieldsAttrs::new(&v.fields)?;
+                        if fields_attrs.delegate.is_some() && variant_attrs.code.is_some() {
+                            return Err(Error::new_spanned(
+                                fields_attrs.delegate.unwrap().kw,
+                                "can't specify both code and delegate",
+                            ));
                         }
-
+                        variant_attrs.code = variant_attrs.code.or_else(|| ty_attrs.code.clone());
+                        if fields_attrs.delegate.is_none() && variant_attrs.code.is_none() {
+                            return Err(Error::new_spanned(
+                                v.ident.clone(),
+                                "code or delegate must be specified",
+                            ));
+                        }
                         Ok(Variant {
                             repr: v.clone(),
-                            attrs: variant_attrs,
+                            variant_attrs,
+                            fields_attrs,
                         })
                     })
                     .collect::<Result<Vec<_>>>()?;
                 ItemData::Enum(ItemDataEnum { variants })
             }
             Data::Struct(data) => {
-                if attrs.delegate.is_none() && attrs.code.is_none() {
+                let fields_attrs = FieldsAttrs::new(&data.fields)?;
+                if fields_attrs.delegate.is_some() && ty_attrs.code.is_some() {
+                    return Err(Error::new_spanned(
+                        fields_attrs.delegate.unwrap().kw,
+                        "can't specify both code and delegate",
+                    ));
+                }
+                if fields_attrs.delegate.is_none() && ty_attrs.code.is_none() {
                     return Err(Error::new_spanned(
                         repr.ident.clone(),
                         "code or delegate must be specified",
                     ));
                 }
-                ItemData::Struct(ItemDataStruct { attrs, repr: data })
+                ItemData::Struct(ItemDataStruct {
+                    ty_attrs,
+                    fields_attrs,
+                    repr: data,
+                })
             }
-            Data::Union(_) => {
-                if attrs.delegate.is_none() && attrs.code.is_none() {
+            Data::Union(data) => {
+                if ty_attrs.code.is_none() {
                     return Err(Error::new_spanned(
                         repr.ident.clone(),
                         "code must be specified",
                     ));
                 }
-                ItemData::Union(ItemDataUnion { attrs })
+                let fields_attrs = FieldsAttrs::new(&data.fields.into())?;
+                if let Some(delegate) = fields_attrs.delegate {
+                    return Err(Error::new_spanned(
+                        delegate.kw,
+                        "can't use delegate on union type",
+                    ));
+                }
+                ItemData::Union(ItemDataUnion { ty_attrs })
             }
         };
 
@@ -86,6 +103,7 @@ impl Parse for Item {
     }
 }
 
+#[allow(clippy::large_enum_variant)]
 pub enum ItemData {
     Enum(ItemDataEnum),
     Struct(ItemDataStruct),
@@ -97,14 +115,16 @@ pub struct ItemDataEnum {
 
 pub struct ItemDataStruct {
     pub repr: syn::DataStruct,
-    pub attrs: Attrs,
+    pub ty_attrs: TypeAttrs,
+    pub fields_attrs: FieldsAttrs,
 }
 
 pub struct ItemDataUnion {
-    pub attrs: Attrs,
+    pub ty_attrs: TypeAttrs,
 }
 
 pub struct Variant {
     pub repr: syn::Variant,
-    pub attrs: Attrs,
+    pub variant_attrs: TypeAttrs,
+    pub fields_attrs: FieldsAttrs,
 }

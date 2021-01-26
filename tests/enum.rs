@@ -17,8 +17,7 @@ enum Error {
     #[response(code = 404)]
     NotFound,
     #[error("auth error")]
-    #[response(delegate = .0)]
-    Auth(AuthError),
+    Auth(#[response(delegate)] AuthError),
     #[error("other")]
     Other,
 }

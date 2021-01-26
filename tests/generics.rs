@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use rocket::{
     get,
     http::{ContentType, Status},
@@ -8,16 +10,29 @@ use rocket_simple_responder::SimpleResponder;
 use thiserror::Error;
 
 #[derive(Debug, Error, SimpleResponder)]
-enum WithInternalServerError<T>
+enum WithInternalServerError<T, E>
 where
-    T: std::fmt::Debug,
+    T: Debug,
+    E: WithType + Debug,
+    E::A: Debug,
 {
     #[error("internal server error")]
     #[response(code = 500)]
     InternalServerError(String),
     #[error("internal server error")]
-    #[response(delegate = .0)]
-    OtherError(T),
+    OtherError(#[response(delegate)] T),
+    #[error("internal server error")]
+    OtherError2(#[response(delegate)] E::A),
+}
+
+#[derive(Debug)]
+struct Dummy;
+impl WithType for Dummy {
+    type A = String;
+}
+
+trait WithType {
+    type A;
 }
 
 #[derive(Debug, Error, SimpleResponder)]
@@ -31,7 +46,7 @@ enum AuthError {
 }
 
 #[get("/")]
-fn case1_route() -> WithInternalServerError<AuthError> {
+fn case1_route() -> WithInternalServerError<AuthError, Dummy> {
     WithInternalServerError::OtherError(AuthError::Forbidden)
 }
 
@@ -52,7 +67,7 @@ async fn case1() {
 }
 
 #[get("/")]
-fn case2_route() -> WithInternalServerError<AuthError> {
+fn case2_route() -> WithInternalServerError<AuthError, Dummy> {
     WithInternalServerError::InternalServerError("".into())
 }
 
@@ -68,6 +83,26 @@ async fn case2() {
 
     assert_eq!(
         response.into_string().await,
-        Some(WithInternalServerError::<AuthError>::InternalServerError("".into()).to_string())
+        Some(
+            WithInternalServerError::<AuthError, Dummy>::InternalServerError("".into()).to_string()
+        )
     );
+}
+
+#[get("/")]
+fn case3_route() -> WithInternalServerError<AuthError, Dummy> {
+    WithInternalServerError::OtherError2("content".into())
+}
+
+#[tokio::test]
+async fn case3() {
+    let rocket = rocket::ignite().mount("/", routes![case3_route]);
+    let client = Client::untracked(rocket)
+        .await
+        .expect("valid rocket instance");
+    let response = client.get("/").dispatch().await;
+    assert_eq!(response.status(), Status::Ok);
+    assert_eq!(response.content_type(), Some(ContentType::Plain));
+
+    assert_eq!(response.into_string().await, Some("content".into()));
 }
