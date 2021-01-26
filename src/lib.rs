@@ -1,6 +1,6 @@
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
-use syn::{parse_macro_input, parse_quote, Fields};
+use syn::{parse_macro_input, parse_quote, Fields, WhereClause};
 use utils::{Item, ItemData};
 
 mod attrs;
@@ -14,6 +14,15 @@ pub fn derive_maskable(input: TokenStream) -> TokenStream {
     impl_generics.params.push(parse_quote!('_r));
     impl_generics.params.push(parse_quote!('_o: '_r));
     let (_, ty_generics, where_clauses) = input.generics.split_for_impl();
+    let types = input.generics.type_params().map(|t| &t.ident);
+    let mut expanded_where_clauses: WhereClause =
+        parse_quote! {where #(#types: ::rocket::response::Responder<'_r, '_o>,)*};
+
+    if let Some(where_clauses) = where_clauses {
+        for predicate in &where_clauses.predicates {
+            expanded_where_clauses.predicates.push(predicate.clone());
+        }
+    }
 
     let ident = input.ident;
 
@@ -87,7 +96,7 @@ pub fn derive_maskable(input: TokenStream) -> TokenStream {
 
     (quote! {
         impl#impl_generics ::rocket::response::Responder<'_r, '_o> for #ident#ty_generics
-        #where_clauses
+        #expanded_where_clauses
         {
             fn respond_to(self, request: &'_r ::rocket::Request<'_>) -> ::rocket::response::Result<'_o> {
                 #responder_impl
@@ -109,7 +118,7 @@ fn fields_pat(fields: &Fields) -> proc_macro2::TokenStream {
                 .iter()
                 .enumerate()
                 .map(|(i, _f)| format_ident!("_{}", i));
-            quote! {(#(#fields)*,)}
+            quote! {(#(#fields,)*)}
         }
         Fields::Unit => {
             quote! {}
