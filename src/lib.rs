@@ -38,6 +38,25 @@ pub fn derive_maskable(input: TokenStream) -> TokenStream {
                     }
                 } else if let Some(code) = &v.variant_attrs.code {
                     let code = code.code;
+                    #[allow(clippy::match_single_binding)]
+                    let additional_impl = match code {
+                        #[cfg(feature = "logging")]
+                        200..=399 => quote! {
+                            ::rocket::info!("{}", msg);
+                            ::rocket::info!("{:?}", msg);
+                        },
+                        #[cfg(feature = "logging")]
+                        400..=499 => quote! {
+                            ::rocket::warn!("{}", msg);
+                            ::rocket::warn!("{:?}", msg);
+                        },
+                        #[cfg(feature = "logging")]
+                        500..=599 => quote! {
+                            ::rocket::error!("{}", msg);
+                            ::rocket::error!("{:?}", msg);
+                        },
+                        _ => quote! {},
+                    };
                     let patterns = match &v.repr.fields {
                         Fields::Named(..) => quote!{(..)},
                         Fields::Unnamed(..) => quote!{(..)},
@@ -46,6 +65,7 @@ pub fn derive_maskable(input: TokenStream) -> TokenStream {
                     quote! {
                         Self::#ident#patterns => {
                             let msg = ::std::string::ToString::to_string(&self);
+                            #additional_impl
                             Ok(::rocket::Response::build()
                                 .status(::rocket::http::Status::from_code(#code).unwrap())
                                 .header(::rocket::http::ContentType::Plain)
@@ -73,8 +93,28 @@ pub fn derive_maskable(input: TokenStream) -> TokenStream {
                 }}
             } else if let Some(code) = data.ty_attrs.code {
                 let code = code.code;
+                #[allow(clippy::match_single_binding)]
+                let additional_impl = match code {
+                    #[cfg(feature = "logging")]
+                    200..=399 => quote! {
+                        ::rocket::info!("{}", msg);
+                        ::rocket::info!("{:?}", msg);
+                    },
+                    #[cfg(feature = "logging")]
+                    400..=499 => quote! {
+                        ::rocket::warn!("{}", msg);
+                        ::rocket::warn!("{:?}", msg);
+                    },
+                    #[cfg(feature = "logging")]
+                    500..=599 => quote! {
+                        ::rocket::error!("{}", msg);
+                        ::rocket::error!("{:?}", msg);
+                    },
+                    _ => quote! {},
+                };
                 quote! {{
                     let msg = ::std::string::ToString::to_string(&self);
+                    #additional_impl
                     Ok(::rocket::Response::build()
                         .status(::rocket::http::Status::from_code(#code).unwrap())
                         .header(::rocket::http::ContentType::Plain)
